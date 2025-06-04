@@ -5,6 +5,7 @@ from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
 from PIL import Image
 
+
 # Load environment variables
 load_dotenv()
 
@@ -67,9 +68,12 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     reader = PdfReader(pdf_path)
     num_pages = len(reader.pages)
 
-    images = convert_from_path(
-        pdf_path
-    )
+    images = convert_from_path(        
+        pdf_path,
+        first_page=1,
+        last_page=num_pages if all_pages else 1,
+        poppler_path=POPPLER_PATH
+        )
 
     image_paths = []
     for idx, image in enumerate(images):

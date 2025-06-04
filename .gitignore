@@ -8,3 +8,5 @@ __pycache__/
 *.log
 *.sqlite3
 .DS_Store
+py311env/
+
