@@ -10,7 +10,6 @@ click==8.2.1
 colorama==0.4.6
 distro==1.9.0
 dnspython==1.16.0
-docx2pdf==0.1.8
 Flask==2.3.2
 fpdf==1.7.2
 h11==0.14.0
