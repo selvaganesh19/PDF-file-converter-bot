@@ -4,6 +4,8 @@ from pdf2docx import Converter
 from PyPDF2 import PdfReader, PdfWriter
 from pdf2image import convert_from_path
 from PIL import Image
+import platform
+
 
 
 # Load environment variables
