@@ -86,3 +86,24 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
         image_paths.append(img_path)
 
     return image_paths
+
+def merge_pdfs(pdf_paths: list) -> str:
+    """Merge multiple PDF files into a single PDF."""
+    if not pdf_paths:
+        raise ValueError("No PDF files provided to merge.")
+
+    output_dir = os.path.join(TEMP_DIR, "merged_pdfs")
+    os.makedirs(output_dir, exist_ok=True)
+
+    writer = PdfWriter()
+    for pdf_path in pdf_paths:
+        reader = PdfReader(pdf_path)
+        for page in reader.pages:
+            writer.add_page(page)
+
+    output_path = os.path.join(output_dir, "merged_output.pdf")
+    with open(output_path, "wb") as f_out:
+        writer.write(f_out)
+
+    return output_path
+
