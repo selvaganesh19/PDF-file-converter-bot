@@ -1,5 +1,3 @@
-# --- pdf_handlers.py ---
-
 import os
 from dotenv import load_dotenv
 from pdf2docx import Converter
@@ -14,9 +12,12 @@ load_dotenv()
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-POPPLER_PATH = os.getenv("POPPLER_PATH")
-if platform.system() == "Windows" and not POPPLER_PATH:
-    raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
+if platform.system() == "Windows":
+    POPPLER_PATH = os.getenv("POPPLER_PATH")
+    if not POPPLER_PATH:
+        raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
+else:
+    POPPLER_PATH = None
 
 def convert_pdf_to_word(pdf_path: str) -> str:
     word_path = pdf_path.replace('.pdf', '.docx')
@@ -55,7 +56,7 @@ def image_to_pdf(image_path: str) -> str:
     return pdf_path
 
 def merge_images_to_pdf(image_paths: list) -> str:
-    sorted_paths = sorted(image_paths)
+    sorted_paths = sorted(image_paths)  # Sort to maintain order
     images = []
     for img_path in sorted_paths:
         img = Image.open(img_path)
@@ -70,7 +71,8 @@ def merge_images_to_pdf(image_paths: list) -> str:
 def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     reader = PdfReader(pdf_path)
     num_pages = len(reader.pages)
-    images = convert_from_path(
+
+    images = convert_from_path(        
         pdf_path,
         first_page=1,
         last_page=num_pages if all_pages else 1,
@@ -86,20 +88,12 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     return image_paths
 
 def merge_pdfs(pdf_paths: list) -> str:
-    if not pdf_paths:
-        raise ValueError("No PDF files provided to merge.")
-
-    output_dir = os.path.join(TEMP_DIR, "merged_pdfs")
-    os.makedirs(output_dir, exist_ok=True)
-
     writer = PdfWriter()
-    for pdf_path in pdf_paths:
-        reader = PdfReader(pdf_path)
+    for path in pdf_paths:
+        reader = PdfReader(path)
         for page in reader.pages:
             writer.add_page(page)
-
-    output_path = os.path.join(output_dir, "merged_output.pdf")
+    output_path = os.path.join(TEMP_DIR, "merged_output.pdf")
     with open(output_path, "wb") as f_out:
         writer.write(f_out)
-
     return output_path
