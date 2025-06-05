@@ -33,17 +33,19 @@ def split_pdf(pdf_path: str, pages: list = None) -> list:
     if pages is None:
         pages = list(range(1, len(reader.pages) + 1))
 
-    output_paths = []
+    writer = PdfWriter()
+
     for page_num in pages:
         if 1 <= page_num <= len(reader.pages):
-            writer = PdfWriter()
             writer.add_page(reader.pages[page_num - 1])
-            output_path = os.path.join(output_dir, f"page_{page_num}.pdf")
-            with open(output_path, "wb") as f_out:
-                writer.write(f_out)
-            output_paths.append(output_path)
+        else:
+            raise ValueError(f"Page {page_num} is out of range for this PDF.")
 
-    return output_paths
+    output_path = os.path.join(output_dir, f"split_selected_pages.pdf")
+    with open(output_path, "wb") as f_out:
+        writer.write(f_out)
+
+    return [output_path]
 
 def image_to_pdf(image_path: str) -> str:
     image = Image.open(image_path)
