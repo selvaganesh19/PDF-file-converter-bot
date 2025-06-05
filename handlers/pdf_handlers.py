@@ -1,3 +1,5 @@
+# --- pdf_handlers.py ---
+
 import os
 from dotenv import load_dotenv
 from pdf2docx import Converter
@@ -6,17 +8,15 @@ from pdf2image import convert_from_path
 from PIL import Image
 import platform
 
-
-
 # Load environment variables
 load_dotenv()
 
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-if platform.system() == "Windows":
-    if not os.getenv("POPPLER_PATH"):
-        raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
+POPPLER_PATH = os.getenv("POPPLER_PATH")
+if platform.system() == "Windows" and not POPPLER_PATH:
+    raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
 
 def convert_pdf_to_word(pdf_path: str) -> str:
     word_path = pdf_path.replace('.pdf', '.docx')
@@ -34,7 +34,6 @@ def split_pdf(pdf_path: str, pages: list = None) -> list:
         pages = list(range(1, len(reader.pages) + 1))
 
     writer = PdfWriter()
-
     for page_num in pages:
         if 1 <= page_num <= len(reader.pages):
             writer.add_page(reader.pages[page_num - 1])
@@ -56,7 +55,7 @@ def image_to_pdf(image_path: str) -> str:
     return pdf_path
 
 def merge_images_to_pdf(image_paths: list) -> str:
-    sorted_paths = sorted(image_paths)  # Sort to maintain order
+    sorted_paths = sorted(image_paths)
     images = []
     for img_path in sorted_paths:
         img = Image.open(img_path)
@@ -71,13 +70,12 @@ def merge_images_to_pdf(image_paths: list) -> str:
 def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     reader = PdfReader(pdf_path)
     num_pages = len(reader.pages)
-
-    images = convert_from_path(        
+    images = convert_from_path(
         pdf_path,
         first_page=1,
         last_page=num_pages if all_pages else 1,
         poppler_path=POPPLER_PATH
-        )
+    )
 
     image_paths = []
     for idx, image in enumerate(images):
@@ -88,7 +86,6 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     return image_paths
 
 def merge_pdfs(pdf_paths: list) -> str:
-    """Merge multiple PDF files into a single PDF."""
     if not pdf_paths:
         raise ValueError("No PDF files provided to merge.")
 
@@ -106,4 +103,3 @@ def merge_pdfs(pdf_paths: list) -> str:
         writer.write(f_out)
 
     return output_path
-
