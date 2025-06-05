@@ -49,7 +49,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
     action = query.data
-    user_data[user_id] = {'action': action, 'images': [], 'files': []}
+    
+    if action == 'merge_pdfs':
+        user_data[user_id] = {'action': action, 'pdfs': []}
+    else:
+        user_data[user_id] = {'action': action, 'images': []}
+
     await query.edit_message_text(f"Selected: {action.replace('_', ' ').title()}\n\nNow upload your file(s).")
     return WAITING_FILE
 
@@ -61,6 +66,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Please use /start to select an action first.")
         return ConversationHandler.END
 
+    # Handle images for image_to_pdf
     if action == 'image_to_pdf' and update.message.photo:
         file_obj = update.message.photo[-1]
         file_path = os.path.join(DOWNLOADS_DIR, f"{file_obj.file_id}.jpg")
@@ -70,21 +76,26 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Image received. Send more images or send /done when ready.")
         return WAITING_FILE
 
+    # Handle documents
     if update.message.document:
         file_obj = update.message.document
         file_path = os.path.join(DOWNLOADS_DIR, file_obj.file_name)
         new_file = await context.bot.get_file(file_obj.file_id)
         await new_file.download_to_drive(custom_path=file_path)
 
-        if action == 'merge_pdfs':
-            user_data[user_id]['files'].append(file_path)
-            await update.message.reply_text("PDF received. Send more PDFs or send /done when ready.")
-            return WAITING_FILE
-
         if action == 'split_pdf':
             user_data[user_id]['file_path'] = file_path
             await update.message.reply_text("Enter page numbers or ranges to split (e.g., 1,3-5):")
             return WAITING_PAGE_RANGE
+
+        if action == 'merge_pdfs':
+            if file_obj.mime_type == 'application/pdf':
+                user_data[user_id]['pdfs'].append(file_path)
+                await update.message.reply_text("PDF received. Send more or type /done when ready to merge.")
+                return WAITING_FILE
+            else:
+                await update.message.reply_text("Only PDF files are allowed for merging.")
+                return WAITING_FILE
 
         await update.message.reply_text("Processing...")
         try:
@@ -123,33 +134,36 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    data = user_data.get(user_id, {})
-    action = data.get('action')
+    action = user_data.get(user_id, {}).get('action')
 
-    try:
-        if action == 'image_to_pdf':
-            images = data.get('images', [])
-            if not images:
-                await update.message.reply_text("No images received yet.")
-                return ConversationHandler.END
-
-            await update.message.reply_text("Merging images into a PDF...")
+    if action == 'image_to_pdf':
+        images = user_data[user_id].get('images', [])
+        if not images:
+            await update.message.reply_text("No images received yet.")
+            return ConversationHandler.END
+        await update.message.reply_text("Merging images into a PDF...")
+        try:
             output = merge_images_to_pdf(images)
             await context.bot.send_document(chat_id=update.effective_chat.id, document=open(output, 'rb'))
+        except Exception as e:
+            logger.error(f"Error merging images: {e}")
+            await update.message.reply_text(f"Failed to merge images: {e}")
 
-        elif action == 'merge_pdfs':
-            files = data.get('files', [])
-            if len(files) < 2:
-                await update.message.reply_text("Please upload at least two PDFs.")
-                return WAITING_FILE
-
-            await update.message.reply_text("Merging PDFs...")
-            output = merge_pdfs(files)
+    elif action == 'merge_pdfs':
+        pdfs = user_data[user_id].get('pdfs', [])
+        if len(pdfs) < 2:
+            await update.message.reply_text("You need to upload at least 2 PDFs to merge.")
+            return WAITING_FILE
+        await update.message.reply_text("Merging PDFs...")
+        try:
+            output = merge_pdfs(pdfs)
             await context.bot.send_document(chat_id=update.effective_chat.id, document=open(output, 'rb'))
+        except Exception as e:
+            logger.error(f"Error merging PDFs: {e}")
+            await update.message.reply_text(f"Failed to merge PDFs: {e}")
 
-    except Exception as e:
-        logger.error(f"Error in /done: {e}")
-        await update.message.reply_text(f"Failed to complete action: {e}")
+    else:
+        await update.message.reply_text("No merging action selected or nothing to merge.")
 
     return ConversationHandler.END
 
