@@ -1,11 +1,14 @@
 import os
-from docx2pdf import convert
+import subprocess
 
-def convert_word_to_pdf(word_path: str) -> str:
-    if not word_path.lower().endswith(('.doc', '.docx')):
-        raise ValueError("Input file is not a Word document")
-
-    output_pdf = word_path.rsplit('.', 1)[0] + ".pdf"
-    # Convert the Word document to PDF
-    convert(word_path, output_pdf)
-    return output_pdf
+def convert_word_to_pdf(docx_path):
+    output_dir = os.path.dirname(docx_path)
+    try:
+        subprocess.run(
+            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, docx_path],
+            check=True
+        )
+        pdf_path = docx_path.replace('.docx', '.pdf')
+        return pdf_path
+    except Exception as e:
+        raise RuntimeError(f"LibreOffice conversion failed: {e}")
