@@ -10,7 +10,7 @@ WORKDIR /app
 COPY . .
 
 # Install Python dependencies
-RUN pip install --upgrade pip && pip install -r requirements.txt
-
+RUN apt-get update && apt-get install -y libreoffice && \
+    pip install --upgrade pip && pip install -r requirements.txt
 # Run your bot
 CMD ["python", "bot.py"]
