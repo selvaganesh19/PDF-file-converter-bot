@@ -12,9 +12,9 @@ load_dotenv()
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-POPPLER_PATH = os.getenv("POPPLER_PATH")
-if not POPPLER_PATH:
-    raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
+if platform.system() == "Windows":
+    if not os.getenv("POPPLER_PATH"):
+        raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
 
 def convert_pdf_to_word(pdf_path: str) -> str:
     word_path = pdf_path.replace('.pdf', '.docx')
