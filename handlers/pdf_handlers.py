@@ -12,10 +12,7 @@ load_dotenv()
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# POPPLER path check
 POPPLER_PATH = os.getenv("POPPLER_PATH") if platform.system() == "Windows" else None
-if platform.system() == "Windows" and not POPPLER_PATH:
-    raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
 
 def convert_pdf_to_word(pdf_path: str) -> str:
     word_path = pdf_path.replace('.pdf', '.docx')
@@ -24,33 +21,21 @@ def convert_pdf_to_word(pdf_path: str) -> str:
     cv.close()
     return word_path
 
-def split_pdf(pdf_path: str, pages_str: str) -> list:
+def split_pdf(pdf_path: str, page_groups: list[list[int]]) -> list:
     reader = PdfReader(pdf_path)
     output_dir = os.path.join(TEMP_DIR, "split_pages")
     os.makedirs(output_dir, exist_ok=True)
 
-    def parse_segments(pages_str):
-        segments = []
-        for part in pages_str.split(','):
-            part = part.strip()
-            if '-' in part:
-                start, end = part.split('-')
-                segments.append(list(range(int(start), int(end)+1)))
-            else:
-                segments.append([int(part)])
-        return segments
-
-    segments = parse_segments(pages_str)
     output_paths = []
 
-    for idx, segment in enumerate(segments):
+    for idx, group in enumerate(page_groups):
         writer = PdfWriter()
-        for page_num in segment:
+        for page_num in group:
             if 1 <= page_num <= len(reader.pages):
                 writer.add_page(reader.pages[page_num - 1])
             else:
                 raise ValueError(f"Page {page_num} is out of range.")
-        output_path = os.path.join(output_dir, f"segment_{idx+1}.pdf")
+        output_path = os.path.join(output_dir, f"split_group_{idx + 1}.pdf")
         with open(output_path, "wb") as f_out:
             writer.write(f_out)
         output_paths.append(output_path)
@@ -99,6 +84,7 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
 
 def merge_pdfs(pdf_paths: list) -> str:
     writer = PdfWriter()
+
     for pdf_path in pdf_paths:
         reader = PdfReader(pdf_path)
         for page in reader.pages:
@@ -109,3 +95,33 @@ def merge_pdfs(pdf_paths: list) -> str:
         writer.write(f_out)
 
     return merged_path
+
+def reorder_pdf(pdf_path: str, new_order: list[int]) -> str:
+    reader = PdfReader(pdf_path)
+    writer = PdfWriter()
+
+    for page_num in new_order:
+        if 1 <= page_num <= len(reader.pages):
+            writer.add_page(reader.pages[page_num - 1])
+        else:
+            raise ValueError(f"Page {page_num} is out of range.")
+
+    reordered_path = pdf_path.replace('.pdf', '_reordered.pdf')
+    with open(reordered_path, "wb") as f_out:
+        writer.write(f_out)
+
+    return reordered_path
+
+def compress_pdf(pdf_path: str) -> str:
+    # Basic compression with PyPDF2 (for structure size, not image recompression)
+    reader = PdfReader(pdf_path)
+    writer = PdfWriter()
+
+    for page in reader.pages:
+        writer.add_page(page)
+
+    compressed_path = pdf_path.replace('.pdf', '_compressed.pdf')
+    with open(compressed_path, "wb") as f_out:
+        writer.write(f_out)
+
+    return compressed_path
