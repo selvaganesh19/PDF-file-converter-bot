@@ -12,12 +12,10 @@ load_dotenv()
 TEMP_DIR = "downloads"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-if platform.system() == "Windows":
-    POPPLER_PATH = os.getenv("POPPLER_PATH")
-    if not POPPLER_PATH:
-        raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
-else:
-    POPPLER_PATH = None
+# POPPLER path check
+POPPLER_PATH = os.getenv("POPPLER_PATH") if platform.system() == "Windows" else None
+if platform.system() == "Windows" and not POPPLER_PATH:
+    raise EnvironmentError("POPPLER_PATH not set in environment or .env!")
 
 def convert_pdf_to_word(pdf_path: str) -> str:
     word_path = pdf_path.replace('.pdf', '.docx')
@@ -26,26 +24,38 @@ def convert_pdf_to_word(pdf_path: str) -> str:
     cv.close()
     return word_path
 
-def split_pdf(pdf_path: str, pages: list = None) -> list:
+def split_pdf(pdf_path: str, pages_str: str) -> list:
     reader = PdfReader(pdf_path)
     output_dir = os.path.join(TEMP_DIR, "split_pages")
     os.makedirs(output_dir, exist_ok=True)
 
-    if pages is None:
-        pages = list(range(1, len(reader.pages) + 1))
+    def parse_segments(pages_str):
+        segments = []
+        for part in pages_str.split(','):
+            part = part.strip()
+            if '-' in part:
+                start, end = part.split('-')
+                segments.append(list(range(int(start), int(end)+1)))
+            else:
+                segments.append([int(part)])
+        return segments
 
-    writer = PdfWriter()
-    for page_num in pages:
-        if 1 <= page_num <= len(reader.pages):
-            writer.add_page(reader.pages[page_num - 1])
-        else:
-            raise ValueError(f"Page {page_num} is out of range for this PDF.")
+    segments = parse_segments(pages_str)
+    output_paths = []
 
-    output_path = os.path.join(output_dir, f"split_selected_pages.pdf")
-    with open(output_path, "wb") as f_out:
-        writer.write(f_out)
+    for idx, segment in enumerate(segments):
+        writer = PdfWriter()
+        for page_num in segment:
+            if 1 <= page_num <= len(reader.pages):
+                writer.add_page(reader.pages[page_num - 1])
+            else:
+                raise ValueError(f"Page {page_num} is out of range.")
+        output_path = os.path.join(output_dir, f"segment_{idx+1}.pdf")
+        with open(output_path, "wb") as f_out:
+            writer.write(f_out)
+        output_paths.append(output_path)
 
-    return [output_path]
+    return output_paths
 
 def image_to_pdf(image_path: str) -> str:
     image = Image.open(image_path)
@@ -56,7 +66,7 @@ def image_to_pdf(image_path: str) -> str:
     return pdf_path
 
 def merge_images_to_pdf(image_paths: list) -> str:
-    sorted_paths = sorted(image_paths)  # Sort to maintain order
+    sorted_paths = sorted(image_paths)
     images = []
     for img_path in sorted_paths:
         img = Image.open(img_path)
@@ -72,7 +82,7 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
     reader = PdfReader(pdf_path)
     num_pages = len(reader.pages)
 
-    images = convert_from_path(        
+    images = convert_from_path(
         pdf_path,
         first_page=1,
         last_page=num_pages if all_pages else 1,
@@ -89,11 +99,13 @@ def pdf_to_images(pdf_path: str, all_pages: bool = False) -> list:
 
 def merge_pdfs(pdf_paths: list) -> str:
     writer = PdfWriter()
-    for path in pdf_paths:
-        reader = PdfReader(path)
+    for pdf_path in pdf_paths:
+        reader = PdfReader(pdf_path)
         for page in reader.pages:
             writer.add_page(page)
-    output_path = os.path.join(TEMP_DIR, "merged_output.pdf")
-    with open(output_path, "wb") as f_out:
+
+    merged_path = os.path.join(TEMP_DIR, "merged_pdfs.pdf")
+    with open(merged_path, "wb") as f_out:
         writer.write(f_out)
-    return output_path
+
+    return merged_path
