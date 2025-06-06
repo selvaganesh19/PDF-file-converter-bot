@@ -32,14 +32,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("PDF → Word", callback_data='pdf_to_word'),
          InlineKeyboardButton("Word → PDF", callback_data='word_to_pdf')],
-        [InlineKeyboardButton("Split PDF", callback_data='split_pdf'),
-         InlineKeyboardButton("Merge PDFs", callback_data='merge_pdfs')],
+        [InlineKeyboardButton("Split PDF", callback_data='split_pdf')],
         [InlineKeyboardButton("Image → PDF", callback_data='image_to_pdf'),
          InlineKeyboardButton("PDF → Images", callback_data='pdf_to_images')],
+        [InlineKeyboardButton("Merge PDF", callback_data='merge_pdf')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Welcome! Choose an action. Then upload your file(s).",
+        "Welcome! Choose an action. Then upload your file(s).\nYou can also send /cancel to cancel the operation.",
         reply_markup=reply_markup
     )
     return SELECTING_ACTION
@@ -49,13 +49,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
     action = query.data
-    
-    if action == 'merge_pdfs':
-        user_data[user_id] = {'action': action, 'pdfs': []}
-    else:
-        user_data[user_id] = {'action': action, 'images': []}
-
-    await query.edit_message_text(f"Selected: {action.replace('_', ' ').title()}\n\nNow upload your file(s).")
+    user_data[user_id] = {'action': action, 'images': [], 'pdfs': []}
+    await query.edit_message_text(f"Selected: {action.replace('_', ' ').title()}\n\nNow upload your file(s). For merge, upload all and send /done when ready.")
     return WAITING_FILE
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,7 +61,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Please use /start to select an action first.")
         return ConversationHandler.END
 
-    # Handle images for image_to_pdf
     if action == 'image_to_pdf' and update.message.photo:
         file_obj = update.message.photo[-1]
         file_path = os.path.join(DOWNLOADS_DIR, f"{file_obj.file_id}.jpg")
@@ -76,7 +70,6 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Image received. Send more images or send /done when ready.")
         return WAITING_FILE
 
-    # Handle documents
     if update.message.document:
         file_obj = update.message.document
         file_path = os.path.join(DOWNLOADS_DIR, file_obj.file_name)
@@ -88,14 +81,10 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Enter page numbers or ranges to split (e.g., 1,3-5):")
             return WAITING_PAGE_RANGE
 
-        if action == 'merge_pdfs':
-            if file_obj.mime_type == 'application/pdf':
-                user_data[user_id]['pdfs'].append(file_path)
-                await update.message.reply_text("PDF received. Send more or type /done when ready to merge.")
-                return WAITING_FILE
-            else:
-                await update.message.reply_text("Only PDF files are allowed for merging.")
-                return WAITING_FILE
+        if action == 'merge_pdf':
+            user_data[user_id]['pdfs'].append(file_path)
+            await update.message.reply_text("PDF received. Send more PDFs or send /done when ready.")
+            return WAITING_FILE
 
         await update.message.reply_text("Processing...")
         try:
@@ -137,10 +126,11 @@ async def handle_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = user_data.get(user_id, {}).get('action')
 
     if action == 'image_to_pdf':
-        images = user_data[user_id].get('images', [])
+        images = user_data[user_id]['images']
         if not images:
             await update.message.reply_text("No images received yet.")
             return ConversationHandler.END
+
         await update.message.reply_text("Merging images into a PDF...")
         try:
             output = merge_images_to_pdf(images)
@@ -149,11 +139,12 @@ async def handle_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error merging images: {e}")
             await update.message.reply_text(f"Failed to merge images: {e}")
 
-    elif action == 'merge_pdfs':
-        pdfs = user_data[user_id].get('pdfs', [])
-        if len(pdfs) < 2:
-            await update.message.reply_text("You need to upload at least 2 PDFs to merge.")
-            return WAITING_FILE
+    elif action == 'merge_pdf':
+        pdfs = user_data[user_id]['pdfs']
+        if not pdfs:
+            await update.message.reply_text("No PDFs received yet.")
+            return ConversationHandler.END
+
         await update.message.reply_text("Merging PDFs...")
         try:
             output = merge_pdfs(pdfs)
@@ -162,27 +153,21 @@ async def handle_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error merging PDFs: {e}")
             await update.message.reply_text(f"Failed to merge PDFs: {e}")
 
-    else:
-        await update.message.reply_text("No merging action selected or nothing to merge.")
-
     return ConversationHandler.END
 
-def parse_pages(pages_str):
-    pages = set()
-    for part in pages_str.split(','):
-        if '-' in part:
-            start, end = part.split('-')
-            pages.update(range(int(start), int(end) + 1))
-        else:
-            pages.add(int(part))
-    return sorted(pages)
+async def handle_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    user_data.pop(user_id, None)
+    await update.message.reply_text("Operation cancelled. Send /start to begin again.")
+    return ConversationHandler.END
 
 async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     file_path = user_data[user_id].get('file_path')
+
     try:
-        pages = parse_pages(update.message.text)
-        output_paths = split_pdf(file_path, pages)
+        await update.message.reply_text("Splitting PDF...")
+        output_paths = split_pdf(file_path, update.message.text)
 
         if len(output_paths) > 1:
             zip_buffer = io.BytesIO()
@@ -190,19 +175,19 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for p in output_paths:
                     z.write(p, arcname=os.path.basename(p))
             zip_buffer.seek(0)
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=zip_buffer, filename="split_pages.zip")
+            await context.bot.send_document(chat_id=update.effective_chat.id, document=zip_buffer, filename="split_segments.zip")
         else:
             await context.bot.send_document(chat_id=update.effective_chat.id, document=open(output_paths[0], 'rb'))
 
     except Exception as e:
         logger.error(f"Error splitting PDF: {e}")
-        await update.message.reply_text("Invalid page range. Please try again.")
+        await update.message.reply_text("Invalid page range. Please try again. Example: `1,3-7`", parse_mode="Markdown")
         return WAITING_PAGE_RANGE
 
     return ConversationHandler.END
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send /start to begin and choose an action.")
+    await update.message.reply_text("Send /start to begin and choose an action.\nYou can send /cancel to cancel anytime.")
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -213,15 +198,17 @@ def main():
             SELECTING_ACTION: [CallbackQueryHandler(button_handler)],
             WAITING_FILE: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO, handle_file),
-                CommandHandler("done", handle_done)
+                CommandHandler("done", handle_done),
+                CommandHandler("cancel", handle_cancel)
             ],
             WAITING_PAGE_RANGE: [MessageHandler(filters.TEXT & (~filters.COMMAND), handle_page_range)],
         },
-        fallbacks=[CommandHandler("help", help_command)],
+        fallbacks=[CommandHandler("help", help_command), CommandHandler("cancel", handle_cancel)],
     )
 
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("cancel", handle_cancel))
     app.run_polling()
 
 if __name__ == '__main__':
