@@ -21,6 +21,19 @@ def convert_pdf_to_word(pdf_path: str) -> str:
     cv.close()
     return word_path
 
+def parse_page_range_text(text: str) -> list[list[int]]:
+    page_groups = []
+
+    for part in text.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = map(int, part.split("-"))
+            page_groups.append(list(range(start, end + 1)))
+        else:
+            page_groups.append([int(part)])
+
+    return page_groups
+
 def split_pdf(pdf_path: str, page_groups: list[list[int]]) -> list:
     reader = PdfReader(pdf_path)
     output_dir = os.path.join(TEMP_DIR, "split_pages")
@@ -30,11 +43,21 @@ def split_pdf(pdf_path: str, page_groups: list[list[int]]) -> list:
 
     for idx, group in enumerate(page_groups):
         writer = PdfWriter()
+
+        added_pages = set()
+
         for page_num in group:
+            if page_num in added_pages:
+                continue
             if 1 <= page_num <= len(reader.pages):
                 writer.add_page(reader.pages[page_num - 1])
+                added_pages.add(page_num)
             else:
                 raise ValueError(f"Page {page_num} is out of range.")
+
+        if len(writer.pages) == 0:
+            continue
+
         output_path = os.path.join(output_dir, f"split_group_{idx + 1}.pdf")
         with open(output_path, "wb") as f_out:
             writer.write(f_out)
@@ -113,7 +136,6 @@ def reorder_pdf(pdf_path: str, new_order: list[int]) -> str:
     return reordered_path
 
 def compress_pdf(pdf_path: str) -> str:
-    # Basic compression with PyPDF2 (for structure size, not image recompression)
     reader = PdfReader(pdf_path)
     writer = PdfWriter()
 
