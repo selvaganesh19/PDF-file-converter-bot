@@ -114,6 +114,10 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     await context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(images[0], 'rb'))
                     return ConversationHandler.END
+            elif action == 'split_pdf':
+                user_data[user_id]['file_path'] = file_path
+                await update.message.reply_text("Send page ranges to split (e.g., 1,3-5):")
+                return WAITING_PAGE_RANGE
             else:
                 await update.message.reply_text("Unsupported action.")
                 return ConversationHandler.END
@@ -168,6 +172,17 @@ async def handle_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def parse_order(order_str):
     return [int(x.strip()) for x in order_str.split(',') if x.strip().isdigit()]
 
+def parse_page_range_text(text: str) -> list[list[int]]:
+    groups = []
+    for part in text.split(","):
+        part = part.strip()
+        if "-" in part:
+            start, end = part.split("-")
+            groups.append(list(range(int(start), int(end) + 1)))
+        else:
+            groups.append([int(part)])
+    return groups
+
 async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     action = user_data[user_id].get('action')
@@ -178,6 +193,13 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
             new_order = parse_order(update.message.text)
             output = reorder_pdf(file_path, new_order)
             await context.bot.send_document(chat_id=update.effective_chat.id, document=open(output, 'rb'))
+
+        elif action == 'split_pdf':
+            page_groups = parse_page_range_text(update.message.text)
+            split_paths = split_pdf(file_path, page_groups)
+
+            for split_file in split_paths:
+                await context.bot.send_document(chat_id=update.effective_chat.id, document=open(split_file, 'rb'))
 
     except Exception as e:
         logger.error(f"Error in handle_page_range for {action}: {e}")
