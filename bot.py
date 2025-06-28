@@ -2,12 +2,21 @@ import os
 import logging
 import zipfile
 import io
+import platform
+import threading
+import time
+import requests
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from threading import Thread
+import uvicorn
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler,
     filters, ContextTypes, CallbackQueryHandler, ConversationHandler
 )
+
 from handlers.pdf_handlers import (
     convert_pdf_to_word, split_pdf, image_to_pdf,
     pdf_to_images, merge_images_to_pdf, merge_pdfs,
@@ -15,20 +24,20 @@ from handlers.pdf_handlers import (
 )
 from handlers.word_handlers import convert_word_to_pdf
 
-# Load environment variables
+# === Load environment ===
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
-
 DOWNLOADS_DIR = "downloads"
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# === Bot State ===
 SELECTING_ACTION, WAITING_FILE, WAITING_PAGE_RANGE = range(3)
-
 user_data = {}
 
+# === Telegram Bot Handlers ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("PDF → Word", callback_data='pdf_to_word'),
@@ -41,10 +50,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("PDF → Images", callback_data='pdf_to_images')],
         [InlineKeyboardButton("Cancel", callback_data='cancel')]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "Welcome! Choose an action. Then upload your file(s).",
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     return SELECTING_ACTION
 
@@ -86,13 +94,11 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_file = await context.bot.get_file(file_obj.file_id)
         await new_file.download_to_drive(custom_path=file_path)
 
-        # For multiple files (merge, reorder), store in user_data
         if action in ['merge_pdf', 'reorder_pdf']:
             user_data[user_id]['files'].append(file_path)
             await update.message.reply_text("File received. Upload more or send /done.")
             return WAITING_FILE
 
-        # For single-file actions:
         await update.message.reply_text("Processing...")
         try:
             if action == 'pdf_to_word':
@@ -110,10 +116,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             z.write(img, arcname=os.path.basename(img))
                     zip_buffer.seek(0)
                     await context.bot.send_document(chat_id=update.effective_chat.id, document=zip_buffer, filename="pdf_images.zip")
-                    return ConversationHandler.END
                 else:
                     await context.bot.send_photo(chat_id=update.effective_chat.id, photo=open(images[0], 'rb'))
-                    return ConversationHandler.END
+                return ConversationHandler.END
             elif action == 'split_pdf':
                 user_data[user_id]['file_path'] = file_path
                 await update.message.reply_text("Send page ranges to split (e.g., 1,3-5):")
@@ -197,7 +202,6 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif action == 'split_pdf':
             page_groups = parse_page_range_text(update.message.text)
             split_paths = split_pdf(file_path, page_groups)
-
             for split_file in split_paths:
                 await context.bot.send_document(chat_id=update.effective_chat.id, document=open(split_file, 'rb'))
 
@@ -210,6 +214,26 @@ async def handle_page_range(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Send /start to begin and choose an action.")
+
+# === Render Self Ping and FastAPI Setup ===
+web_app = FastAPI()
+
+@web_app.get("/")
+def health_check():
+    return {"status": "Bot is alive!"}
+
+def run_web():
+    uvicorn.run(web_app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+def self_ping():
+    url = os.getenv("RENDER_EXTERNAL_URL", "https://your-render-url.onrender.com")
+    while True:
+        try:
+            requests.get(url)
+            print("✅ Self-ping sent")
+        except Exception as e:
+            print("❌ Self-ping failed:", e)
+        time.sleep(480)
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
@@ -229,6 +253,9 @@ def main():
 
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("help", help_command))
+
+    Thread(target=run_web).start()
+    threading.Thread(target=self_ping, daemon=True).start()
     app.run_polling()
 
 if __name__ == '__main__':
