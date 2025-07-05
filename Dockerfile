@@ -1,7 +1,7 @@
 # Use official Python slim image
 FROM python:3.11-slim
 
-# Install system packages required, including libgl1-mesa-glx for libGL.so.1
+# Install system packages and Java (default-jre)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         poppler-utils \
@@ -12,8 +12,15 @@ RUN apt-get update && \
         libmagic1 \
         libgl1-mesa-glx \
         tesseract-ocr \
-        libreoffice && \
+        libreoffice \
+        default-jre \
+        fonts-dejavu \
+        && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory
 WORKDIR /app
