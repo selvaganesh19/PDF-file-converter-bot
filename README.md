@@ -11,7 +11,7 @@ A powerful Telegram bot that helps users convert and manage PDF and Word documen
 - ✂️ **Split PDF** by custom page ranges (e.g., `1,3-5`)
 - 🖼️ **Image → PDF** (Supports multiple images → single PDF)
 - 📸 **PDF → Images** (Download all pages as PNGs or ZIP)
-- 📱 Fully mobile compatible
+- 📱 Fully mobile compatible application
 - 📂 Supports uploading documents and photos directly in chat
 
 ---
