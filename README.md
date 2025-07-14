@@ -12,7 +12,7 @@ A powerful Telegram bot that helps users convert and manage PDF and Word documen
 - 🖼️ **Image → PDF** (Supports multiple images → single PDF)
 - 📸 **PDF → Images** (Download all pages as PNGs or ZIP)
 - 📱 Fully mobile compatible application
-- 📂 Supports uploading documents and photos directly in chat
+- 📂 Supports uploading documents and photos and Excel file directly in chat
 
 ---
 
