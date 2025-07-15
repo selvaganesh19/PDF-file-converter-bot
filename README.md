@@ -84,17 +84,17 @@ Converts all pages of a PDF into PNG images or sends them as a ZIP file.
 ```bash
 git clone https://github.com/your-username/pdf-file-converter-bot.git
 cd pdf-file-converter-bot
-
+```
 2. Create a virtual environment
-
+```bash
 python -m venv ilovepdf-env
 .\ilovepdf-env\Scripts\activate  # On Windows
 # source ilovepdf-env/bin/activate  # On macOS/Linux
-
+```
 3. Install dependencies
-
+```bash
 pip install -r requirements.txt
-
+```
 4. Add environment variables
 Create a .env file:
   BOT_TOKEN=your-telegram-bot-token
@@ -102,9 +102,9 @@ Create a .env file:
 ⚠️ You can download Poppler for Windows and set the correct path.
 
 5. Run the bot
-
+```bash
 python bot.py
-
+```
 📁 Folder Structure
 
 pdf-file-converter-bot/
@@ -117,4 +117,7 @@ pdf-file-converter-bot/
 ├── .env                    # Your secrets (ignored in .gitignore)
 └── .gitignore
 
+---
+# **LICENSE**
+[MIT LICENSE](https://github.com/selvaganesh19/PDF-file-converter-bot/edit/main/LICENSE)
 
